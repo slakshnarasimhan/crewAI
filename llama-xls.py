@@ -18,7 +18,7 @@ os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
 # Use all available CPU cores
 CPU_CORES = os.cpu_count()
-model="deepseek-r1:1.5b"
+model="mistral"
 llm = Ollama(model=model, base_url="http://localhost:11434")
 
 
@@ -118,7 +118,7 @@ if __name__ == "__main__":
     print("Starting script...")
 
     # File path
-    FILE_PATH = "/Users/narasimhan/workspace/python-workbench/betterhome/sample.xlsx"
+    FILE_PATH = "/Users/narasimhan/workspace/python-workbench/betterhome/products.xlsx"
 
     # Initialize vectorstore and retriever
     process_csv_file(FILE_PATH)
