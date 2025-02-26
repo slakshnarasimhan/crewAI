@@ -236,7 +236,7 @@ if __name__ == "__main__":
     print("Starting script...")
 
     # File path
-    FILE_PATH = "/Users/narasimhan/workspace/python-workbench/betterhome/products.xlsx"
+    FILE_PATH = "/Users/narasimhan/workspace/python-workbench/betterhome/products-master.xlsx"
 
     # Initialize vectorstore and retriever
     process_csv_file(FILE_PATH)
