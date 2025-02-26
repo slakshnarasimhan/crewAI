@@ -17,41 +17,40 @@ os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
 # Use all available CPU cores
 CPU_CORES = os.cpu_count()
-model="llama3.2"
+model="mistral"
 llm = Ollama(model=model, base_url="http://localhost:11434")
 
 def parallel_split_text(df, chunk_size=100, chunk_overlap=50):
     """Split DataFrame into smaller chunks with clear product information."""
     chunks = []
     for _, row in df.iterrows():
-        category = row.get("Product Category", "").strip().lower()
-        brand = row.get("Brand", "")
+        brand = row.get("Brand", "").strip().lower()
+        category = row.get("Type", "").strip().lower()
         product_name = row.get("Product Name", "")
         price = row.get("Price", "")
         retail_price = row.get("Retail Price", "")
-        description = row.get("Description", "")
-        features = row.get("Features", "")
-        warranty = row.get("Warranty", "")
+        return_policy = row.get("Return Policy", "")
 
-
-        # Combine product name and price into one chunk
-        product_info = f"Product: {product_name} | Category: {category} | Brand: {brand}"
+        # Combine product name, category, and brand into one chunk
+        product_info = f"Product: {product_name} | Type: {category} | Brand: {brand}"
         if price:
             product_info += f" | Price: {price}"
         if retail_price:
             product_info += f" | Retail Price: {retail_price}"
-        if description:
-            product_info += f" | Description: {description}"
-        if features:
-            product_info += f" | Features: {features}"
-        if warranty:
-            product_info += f" | Warranty: {warranty}"
+        if return_policy:
+            product_info += f" | Return Policy: {return_policy}"
 
-        # Only append if product name is available
+        # Append only if product name exists
         if product_name:
             chunks.append(product_info)
 
+        # Store return policy separately for easy retrieval
+        if return_policy:
+            chunks.append(f"Brand: {brand} | Type: {category} | Return Policy: {return_policy}")
+
     return chunks
+
+
 
 
 
@@ -83,14 +82,24 @@ def initialize_vectorstore(file_path, embeddings):
 
 def process_csv_file(file_path):
     """Load and process the dataset, generate embeddings, and create a retriever."""
-    global vectorstore, retriever
+    global vectorstore, retriever, total_products, category_counts
 
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"The file '{file_path}' does not exist.")
 
+    # Load the DataFrame
+    df = pd.read_excel(file_path, engine="openpyxl", dtype=str).fillna('')
+
+    # Store the total number of products
+    total_products = len(df)
+
+    # Store the count of products by category (case-insensitive)
+    category_counts = df["Type"].str.strip().str.lower().value_counts().to_dict()
+
+    # Initialize vectorstore
     embeddings = OllamaEmbeddings(base_url="http://localhost:11434", show_progress=True, model=model)
     vectorstore = initialize_vectorstore(file_path, embeddings)
-    retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 50, "fetch_k": 20})
+    retriever = vectorstore.as_retriever(search_type="mmr", search_kwargs={"k": 50, "fetch_k": 100})
 
 def ollama_llm(question, context):
     """Query the LLM using provided question, context, and examples."""
@@ -112,6 +121,16 @@ def ollama_llm(question, context):
     A: 1. Product: Faber Chimney | Price: 79191
        2. Product: Glen Chimney | Price: 40041
        3. Product: AO Smith Water Heater | Price: 29285
+       
+
+    Q: What chimney brands are available?
+    A: The available chimney brands are Faber, Elica, Glen, and Kaff.
+
+    Q: How many modes are available in LED mirrors?
+    A: There are 3 modes available in LED mirrors: Warm White, Cool White, and Daylight.
+
+    Q: How many colour temperatures are available in LED mirrors?
+    A: LED mirrors offer 3 colour temperatures: 3000K, 4000K, and 6000K.
     """
 
     formatted_prompt = (
@@ -135,13 +154,15 @@ def ollama_llm(question, context):
 
 
     formatted_prompt = (
-    f"Using ONLY the provided product catalogue context, answer the question.\n"
-    f"Focus on the specific product category mentioned in the question.\n"
-    f"Focus on price information when asked about price range.\n"
-    f"If no relevant information is found, respond with 'I don’t know'.\n"
-    f"Keep the answer concise and list product brands when applicable.\n\n"
+    f"Use ONLY the provided product catalogue context to answer the question.\n"
+    f"Focus on the highest price when asked for the most expensive product.\n"
+    f"Focus on return policy details when asked.\n"
+    f"If the context doesn't include the requested information, respond with 'I don’t know'.\n"
+    f"Keep the answer concise and accurate.\n\n"
+    f"{few_shots}\n"
     f"Question: {question}\nContext: {context}"
-    )
+    )   
+
 
     response = ollama.chat(
         model=model,
@@ -161,57 +182,61 @@ def compress_context(docs, max_tokens=5000):
     return combined[:max_tokens] if len(combined) > max_tokens else combined
 
 def ask_question(question):
-    """Retrieve relevant documents and get an answer from the LLM."""
-    # Identify product category from the question using simple keyword matching
+    """Retrieve relevant documents and get an answer from the LLM or perform direct calculations."""
+    global total_products, category_counts
+
+    question_lower = question.lower()
+
+    # Brand-specific filtering
+    brand_filter = None
+    if "bosch" in question_lower:
+        brand_filter = "bosch"
+
+    # Return policy filter
+    return_policy_filter = "return policy" if "return policy" in question_lower else None
+
+    # Product category filtering
     category_keywords = {
-    "chimney": "Chimney",
-    "water heater": "Water Heater",
-    "fan": "Fan",
-    "microwave": "Microwave",
-    "hob top": "Hob Top",
-    "refrigerator": "Refrigerator"
+        "chimney": "chimney",
+        "water heater": "water heater",
+        "fan": "fan",
+        "microwave": "microwave",
+        "hob top": "hob top",
+        "refrigerator": "refrigerator",
+        "led mirror": "led mirror"
     }
 
-    # Initialize category_filter to avoid UnboundLocalError
     category_filter = None
-
-    # Determine category based on question
     for keyword, category in category_keywords.items():
-        if keyword in question.lower():
+        if keyword in question_lower:
             category_filter = category
             break
 
-    # Determine category based on question
+    # Construct filters
+    filters = {}
     if category_filter:
-       retrieved_docs = retriever.invoke(question, search_kwargs={"filter": {"category": category_filter.lower()}})
-    else:
-       retrieved_docs = retriever.invoke(question)
+        filters["category"] = category_filter
+    if brand_filter:
+        filters["brand"] = brand_filter
+    if return_policy_filter:
+        filters["return_policy"] = return_policy_filter
 
-    for keyword, category in category_keywords.items():
-        if keyword in question.lower():
-            category_filter = category
-            break
-
-    # Retrieve documents with or without category filter
-    if category_filter:
-        retrieved_docs = retriever.invoke(question, search_kwargs={"filter": {"category": category_filter}})
+    # Retrieve documents with filters
+    if filters:
+        retrieved_docs = retriever.invoke(question, search_kwargs={"filter": filters})
     else:
         retrieved_docs = retriever.invoke(question)
 
-    #print("\n--- Retrieved Documents ---")
-    #for doc in retrieved_docs:
-    #    print(doc.page_content)
-    #print("---------------------------\n")
-
     context = compress_context(retrieved_docs)
     return ollama_llm(question, context)
+
 
 
 if __name__ == "__main__":
     print("Starting script...")
 
     # File path
-    FILE_PATH = "/Users/narasimhan/workspace/python-workbench/betterhome/sample.xlsx"
+    FILE_PATH = "/Users/narasimhan/workspace/python-workbench/betterhome/products.xlsx"
 
     # Initialize vectorstore and retriever
     process_csv_file(FILE_PATH)
@@ -219,9 +244,13 @@ if __name__ == "__main__":
     #print(df.columns) 
 
     #print(ask_question("What chimney brands are available?"))
-    #print(ask_question("What water heater brands do you have?"))
+    print(ask_question("What water heater brands do you have?"))
     #print(ask_question("whats the price range of the hob tops you offer."))
-    #print(ask_question("show all product names and their prices"))
+    print(ask_question("show all product names and their prices"))
+    print(ask_question("What's the most expensive Bosch chimney you have?"))
+    print(ask_question("What is the return policy of Bosch chimneys?"))
+
+
 
     # Interactive loop
     while True:
