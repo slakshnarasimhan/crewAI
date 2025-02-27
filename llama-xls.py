@@ -30,6 +30,7 @@ def parallel_split_text(df, chunk_size=100, chunk_overlap=50):
         price = row.get("Price", "")
         retail_price = row.get("Retail Price", "")
         return_policy = row.get("Return Policy", "")
+        warranty = row.get("Warranty", "")
 
         # Combine product name, category, and brand into one chunk
         product_info = f"Product: {product_name} | Type: {category} | Brand: {brand}"
@@ -39,14 +40,16 @@ def parallel_split_text(df, chunk_size=100, chunk_overlap=50):
             product_info += f" | Retail Price: {retail_price}"
         if return_policy:
             product_info += f" | Return Policy: {return_policy}"
+        if warranty:
+            product_info += f" | Warranty: {warranty}"
 
         # Append only if product name exists
         if product_name:
             chunks.append(product_info)
 
         # Store return policy separately for easy retrieval
-        if return_policy:
-            chunks.append(f"Brand: {brand} | Type: {category} | Return Policy: {return_policy}")
+        #if return_policy:
+        #    chunks.append(f"Brand: {brand} | Type: {category} | Return Policy: {return_policy}")
 
     return chunks
 
@@ -112,7 +115,7 @@ def ollama_llm(question, context):
     A: The available water heater brands are AO Smith, Racold, and Havells.
 
     Q: What fan brands do you have?
-    A: The available fan brands are Crompton, Havells, and Orient.
+    A: The available fan brands are Crompton, Havells, Jaguar and Orient.
 
     Q: What's the price range of the hob tops you offer?
     A: The price range of hob tops is between 20000 and 50000 INR.
@@ -131,6 +134,15 @@ def ollama_llm(question, context):
 
     Q: How many colour temperatures are available in LED mirrors?
     A: LED mirrors offer 3 colour temperatures: 3000K, 4000K, and 6000K.
+
+    Q: What Bosch products do you have?
+    A: The available Bosch products are:
+       1. Bosch Chimney XYZ123 | Price: 20,000 INR
+       2. Bosch Water Heater ABC456 | Price: 15,000 INR
+       3. Bosch Hob Top PQR789 | Price: 30,000 INR
+
+    Q: What all bosch products do you have?
+    A: We have Bosch Hob Top, Dishwasher, Chimney, Measuring Device and Home Appliances.
     """
 
     formatted_prompt = (
@@ -244,11 +256,11 @@ if __name__ == "__main__":
     #print(df.columns) 
 
     #print(ask_question("What chimney brands are available?"))
-    print(ask_question("What water heater brands do you have?"))
+    #print(ask_question("What water heater brands do you have?"))
     #print(ask_question("whats the price range of the hob tops you offer."))
-    print(ask_question("show all product names and their prices"))
-    print(ask_question("What's the most expensive Bosch chimney you have?"))
-    print(ask_question("What is the return policy of Bosch chimneys?"))
+    #print(ask_question("show all product names and their prices"))
+    #print(ask_question("What's the most expensive Bosch chimney you have?"))
+    #print(ask_question("What is the return policy of Bosch chimneys?"))
 
 
 
