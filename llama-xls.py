@@ -56,9 +56,9 @@ def parallel_split_text(df, chunk_size=100, chunk_overlap=50):
 
 def initialize_vectorstore(file_path, embeddings):
     """Initialize Chroma vectorstore with products and expected answers."""
-    if os.path.exists("./chroma_db"):
+    if os.path.exists("./chroma_db-mistral"):
         print("Loading existing Chroma vectorstore...")
-        return Chroma(persist_directory="./chroma_db", embedding_function=embeddings)
+        return Chroma(persist_directory="./chroma_db-mistral", embedding_function=embeddings)
 
     print("Creating new Chroma vectorstore...")
     df = pd.read_excel(file_path, engine="openpyxl", dtype=str)
@@ -77,7 +77,7 @@ def initialize_vectorstore(file_path, embeddings):
     metadatas = [{"index": i, "category": chunk.split("|")[0].split(":")[1].strip().lower()} 
                  for i, chunk in enumerate(chunks)]
 
-    return Chroma.from_texts(texts=chunks, embedding=embeddings, metadatas=metadatas, persist_directory="./chroma_db")
+    return Chroma.from_texts(texts=chunks, embedding=embeddings, metadatas=metadatas, persist_directory="./chroma_db-mistral")
 
 
 def process_csv_file(file_path):
