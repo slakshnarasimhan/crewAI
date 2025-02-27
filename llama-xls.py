@@ -1,5 +1,7 @@
 import os
 import re
+import sys
+import time
 import multiprocessing
 import pandas as pd
 from langchain_community.document_loaders import PyMuPDFLoader
@@ -19,6 +21,9 @@ os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 CPU_CORES = os.cpu_count()
 model="mistral"
 llm = Ollama(model=model, base_url="http://localhost:11434")
+# Choose how to print response: "char" for character-by-character, "word" for word-by-word
+PRINT_MODE = "word"  # Change to "char" for character-by-character printing
+
 
 def parallel_split_text(df, chunk_size=100, chunk_overlap=50):
     """Split DataFrame into smaller chunks with clear product information."""
@@ -192,6 +197,23 @@ def compress_context(docs, max_tokens=5000):
     """Compress context to improve LLM performance."""
     combined = " ".join(doc.page_content for doc in docs)
     return combined[:max_tokens] if len(combined) > max_tokens else combined
+def print_response_character_by_character(response, delay=0.05):
+    """Print response character by character with a delay."""
+    for char in response:
+        sys.stdout.write(char)
+        sys.stdout.flush()
+        time.sleep(delay)
+    print()  # Print a newline at the end
+
+def print_response_word_by_word(response, delay=0.2):
+    """Print response word by word with a delay."""
+    words = response.split()
+    for word in words:
+        sys.stdout.write(word + " ")
+        sys.stdout.flush()
+        time.sleep(delay)
+    print()  # Print a newline at the end
+
 
 def ask_question(question):
     """Retrieve relevant documents and get an answer from the LLM or perform direct calculations."""
@@ -240,7 +262,15 @@ def ask_question(question):
         retrieved_docs = retriever.invoke(question)
 
     context = compress_context(retrieved_docs)
-    return ollama_llm(question, context)
+    response = ollama_llm(question, context)
+    #return ollama_llm(question, context)
+        # Print response based on selected mode
+    if PRINT_MODE == "char":
+        print_response_character_by_character(response)
+    elif PRINT_MODE == "word":
+        print_response_word_by_word(response)
+    else:
+        print(response)
 
 
 
