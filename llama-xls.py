@@ -36,9 +36,11 @@ def parallel_split_text(df, chunk_size=100, chunk_overlap=50):
         retail_price = row.get("Retail Price", "")
         return_policy = row.get("Return Policy", "")
         warranty = row.get("Warranty", "")
+        description = row.get("Description", "")
+        features= row.get("Features", "")
 
         # Combine product name, category, and brand into one chunk
-        product_info = f"Product: {product_name} | Type: {category} | Brand: {brand}"
+        product_info = f"Product: {product_name} | Type: {category} | Brand: {brand} "
         if price:
             product_info += f" | Price: {price}"
         if retail_price:
@@ -154,6 +156,7 @@ def ollama_llm(question, context):
         f"Use ONLY the provided product catalogue context to answer the question.\n"
         f"If the context doesn't include the requested information, respond with 'I don’t know'.\n"
         f"Keep the answer concise and accurate.\n\n"
+        f"Provide the description only when asked about the features.\n\n"
         f"{few_shots}\n"
         f"Question: {question}\nContext: {context}"
     )
